@@ -1,0 +1,18 @@
+auths:
+  - from: "me@example.com"
+    username: me@example.com
+    password: mysmtppassword
+    host: "example.com"
+
+  - from_regex: "^.*@somesite.com$":
+    username: noreply@example.com
+    password: mysmtppassword
+    host: "example.com"
+
+  # Catch-all should come last
+  - catchall: true
+    username: default@example.com
+    password: defaultpass
+    host: "example.com"
+
+host: "localhost"
