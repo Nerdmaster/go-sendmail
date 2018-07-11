@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/mail"
 	"net/smtp"
 	"os"
 	"regexp"
@@ -30,8 +31,8 @@ type config struct {
 }
 
 type email struct {
-	From    string `short:"f" description:"From address"`
-	To      []string
+	From    *mail.Address
+	To      []*mail.Address
 	Message string
 	Auth    smtp.Auth
 }
@@ -46,8 +47,8 @@ func (e *email) setupMessage(message string) {
 			return
 		}
 
-		if e.From == "" && strings.HasPrefix(line, "From: ") {
-			e.From = line[6:]
+		if e.From == nil && strings.HasPrefix(line, "From: ") {
+			e.setFromAddress(line[6:])
 		}
 
 		if strings.HasPrefix(line, "Cc: ") {
@@ -62,8 +63,19 @@ func (e *email) setupMessage(message string) {
 	}
 }
 
+func (e *email) setFromAddress(addr string) {
+	var err error
+	e.From, err = mail.ParseAddress(addr)
+	if err != nil {
+		log.Fatalf(`Invalid "from" address %q: %s`, addr, err)
+	}
+}
+
 func (e *email) addToAddresses(addrlist string) {
-	var addrs = strings.Split(addrlist, ",")
+	var addrs, err = mail.ParseAddressList(addrlist)
+	if err != nil {
+		log.Fatalf("Invalid address(es) %q: %s", addrlist, err)
+	}
 	e.To = append(e.To, addrs...)
 }
 
@@ -73,10 +85,14 @@ func main() {
 
 	getCLIArgs(e)
 	e.setupMessage(parseStdinEmailMessage())
-	e.Auth = getAuth(conf, e.From)
+	e.Auth = getAuth(conf, e.From.Address)
 
 	// Try to send it
-	var err = smtp.SendMail(conf.Host, e.Auth, e.From, e.To, []byte(e.Message))
+	var toList = make([]string, len(e.To))
+	for i, to := range e.To {
+		toList[i] = to.String()
+	}
+	var err = smtp.SendMail(conf.Host, e.Auth, e.From.String(), toList, []byte(e.Message))
 	if err != nil {
 		log.Fatalf("Unable to send email (from %q, to %q, msg %q): %s", e.From, e.To, e.Message, err)
 	}
@@ -105,14 +121,21 @@ func readConfig() config {
 	return conf
 }
 
+var opts struct {
+	From string `short:"f" description:"From address"`
+}
+
 func getCLIArgs(e *email) {
-	var args, err = flags.Parse(e)
+	var args, err = flags.Parse(&opts)
 	if err != nil {
 		log.Fatal(err)
 	}
+	if opts.From != "" {
+		e.setFromAddress(opts.From)
+	}
 
 	for _, arg := range args {
-		e.To = append(e.To, arg)
+		e.addToAddresses(arg)
 	}
 }
 
