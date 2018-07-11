@@ -72,14 +72,20 @@ func bytesToMessage(rawMessage []byte) (message string, done bool) {
 // determine from/to in case those weren't passed on the command line
 func (e *Email) SetupMessage(message string) {
 	e.Message = message
+
+	var hasFrom bool
 	for _, line := range lineRegexp.Split(message, -1) {
-		// The first blank line means we're done with headers, so there's no more data to be gleaned
+		// The first blank line means we're done with headers, so there's no more
+		// data to be gleaned
 		if line == "" {
-			return
+			break
 		}
 
-		if e.From == nil && strings.HasPrefix(line, "From: ") {
-			e.SetFromAddress(line[6:])
+		if strings.HasPrefix(line, "From: ") {
+			hasFrom = true
+			if e.From == nil {
+				e.SetFromAddress(line[6:])
+			}
 		}
 
 		if strings.HasPrefix(line, "Cc: ") {
@@ -91,6 +97,10 @@ func (e *Email) SetupMessage(message string) {
 		if strings.HasPrefix(line, "To: ") {
 			e.AddToAddresses(line[4:])
 		}
+	}
+
+	if !hasFrom && e.From != nil {
+		e.Message = "From: " + e.From.String() + "\r\n" + e.Message
 	}
 }
 
