@@ -17,11 +17,12 @@ type Email struct {
 	To      []*mail.Address
 	Message string
 	Auth    smtp.Auth
+	Mailer  func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
 
 // New returns a new empty Email pointer
 func New() *Email {
-	return new(Email)
+	return &Email{Mailer: smtp.SendMail}
 }
 
 // Read processes the given reader, treating it as if it were a stdin buffer as
@@ -151,6 +152,6 @@ func (e *Email) Send(host string) error {
 	// Hack in the "From" header
 	var msg = "From: " + e.From.String() + "\r\n" + e.Message
 
-	var err = smtp.SendMail(host, e.Auth, e.From.String(), toList, []byte(msg))
+	var err = e.Mailer(host, e.Auth, e.From.String(), toList, []byte(msg))
 	return err
 }
