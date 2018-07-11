@@ -71,50 +71,55 @@ func bytesToMessage(rawMessage []byte) (message string, done bool) {
 // determine from/to in case those weren't passed on the command line
 func (e *Email) SetupMessage(message string) error {
 	var err error
-	e.Message = ""
+	var lines []string
+
+	var headersDone bool
 
 	for _, line := range lineRegexp.Split(message, -1) {
 		// The first blank line means we're done with headers, so there's no more
 		// data to be gleaned
 		if line == "" {
-			break
+			headersDone = true
 		}
 
-		if strings.HasPrefix(line, "From: ") {
-			if e.From == nil {
-				err = e.SetFromAddress(line[6:])
-				if err != nil {
-					return err
-				}
-			}
-
-			// Always remove the "From" header to ensure it can be set to e.From just prior to sending the message
-			line = ""
-		}
-
-		if strings.HasPrefix(line, "Cc: ") {
-			err = e.AddToAddresses(line[4:])
-			if err != nil {
-				return err
-			}
-		}
-		if strings.HasPrefix(line, "Bcc: ") {
-			err = e.AddToAddresses(line[5:])
-			if err != nil {
-				return err
-			}
-		}
-		if strings.HasPrefix(line, "To: ") {
-			err = e.AddToAddresses(line[4:])
+		if !headersDone {
+			line, err = e.parseHeader(line)
 			if err != nil {
 				return err
 			}
 		}
 
-		e.Message += line
+		lines = append(lines, line)
 	}
 
+	e.Message = strings.Join(lines, "\r\n")
 	return nil
+}
+
+// parseHeader treats line as a header string, looking for from, to, cc, or bcc
+// headers.  A modified line (if necessary) is returned along with any errors.
+func (e *Email) parseHeader(line string) (string, error) {
+	var err error
+	if strings.HasPrefix(line, "From: ") {
+		if e.From == nil {
+			err = e.SetFromAddress(line[6:])
+		}
+
+		// Always remove the "From" header to ensure it can be set to e.From just prior to sending the message
+		return "", err
+	}
+
+	if strings.HasPrefix(line, "Cc: ") {
+		return line, e.AddToAddresses(line[4:])
+	}
+	if strings.HasPrefix(line, "Bcc: ") {
+		return line, e.AddToAddresses(line[5:])
+	}
+	if strings.HasPrefix(line, "To: ") {
+		return line, e.AddToAddresses(line[4:])
+	}
+
+	return line, nil
 }
 
 // SetFromAddress parses addr into a mail.Address, returning an error if
