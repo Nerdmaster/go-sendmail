@@ -12,8 +12,6 @@ import (
 	flags "github.com/jessevdk/go-flags"
 )
 
-var lineRegexp = regexp.MustCompile("\r\n|\r|\n")
-
 type authorization struct {
 	From      string
 	FromRegex string `yaml:"from_regex"`
