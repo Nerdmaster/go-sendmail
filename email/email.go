@@ -70,9 +70,8 @@ func bytesToMessage(rawMessage []byte) (message string, done bool) {
 // determine from/to in case those weren't passed on the command line
 func (e *Email) SetupMessage(message string) error {
 	var err error
-	e.Message = message
+	e.Message = ""
 
-	var hasFrom bool
 	for _, line := range lineRegexp.Split(message, -1) {
 		// The first blank line means we're done with headers, so there's no more
 		// data to be gleaned
@@ -81,13 +80,15 @@ func (e *Email) SetupMessage(message string) error {
 		}
 
 		if strings.HasPrefix(line, "From: ") {
-			hasFrom = true
 			if e.From == nil {
 				err = e.SetFromAddress(line[6:])
 				if err != nil {
 					return err
 				}
 			}
+
+			// Always remove the "From" header to ensure it can be set to e.From just prior to sending the message
+			line = ""
 		}
 
 		if strings.HasPrefix(line, "Cc: ") {
@@ -108,11 +109,10 @@ func (e *Email) SetupMessage(message string) error {
 				return err
 			}
 		}
+
+		e.Message += line
 	}
 
-	if !hasFrom && e.From != nil {
-		e.Message = "From: " + e.From.String() + "\r\n" + e.Message
-	}
 	return nil
 }
 
@@ -148,6 +148,9 @@ func (e *Email) Send(host string) error {
 		return errors.New("mail.Send: must have from and to addresses set")
 	}
 
-	var err = smtp.SendMail(host, e.Auth, e.From.String(), toList, []byte(e.Message))
+	// Hack in the "From" header
+	var msg = "From: " + e.From.String() + "\r\n" + e.Message
+
+	var err = smtp.SendMail(host, e.Auth, e.From.String(), toList, []byte(msg))
 	return err
 }
