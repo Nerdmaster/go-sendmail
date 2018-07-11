@@ -31,7 +31,10 @@ func main() {
 	var e = email.New()
 
 	getCLIArgs(e)
-	e.Read(os.Stdin)
+	var err = e.Read(os.Stdin)
+	if err != nil {
+		log.Fatalf("Unable to read stdin: %s", err)
+	}
 	if e.From != nil {
 		e.Auth = getAuth(conf, e.From.Address)
 	}
