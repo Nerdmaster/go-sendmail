@@ -40,8 +40,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to read stdin: %s", err)
 	}
-	if e.From != nil {
-		e.Auth = getAuth(conf, e.From.Address)
+	for _, auth := range conf.Auths {
+		if auth.matches(e) {
+			e.Auth = smtp.PlainAuth("", auth.Username, auth.Password, auth.Host)
+			break
+		}
 	}
 
 	// Try to send it
@@ -99,31 +102,24 @@ func getCLIArgs(e *email.Email) {
 	}
 }
 
-func makeAuth(auth authorization) smtp.Auth {
-	return smtp.PlainAuth("", auth.Username, auth.Password, auth.Host)
+func (auth *authorization) matches(e *email.Email) bool {
+	return auth.Catchall ||
+		auth.matchesFrom(e) ||
+		auth.matchesFromRegex(e)
 }
 
-// getAuth reads through all the auths in the config and uses the first which matches
-func getAuth(conf config, from string) smtp.Auth {
-	for _, auth := range conf.Auths {
-		if auth.From == from {
-			return makeAuth(auth)
-		}
+func (auth *authorization) matchesFrom(e *email.Email) bool {
+	return e.From != nil && auth.From == e.From.Address
+}
 
-		if auth.FromRegex != "" {
-			var fromRegex, err = regexp.Compile(auth.FromRegex)
-			if err != nil {
-				log.Fatalf("Invalid regex %q: %s", fromRegex, err)
-			}
-			if fromRegex.MatchString(from) {
-				return makeAuth(auth)
-			}
-		}
-
-		if auth.Catchall {
-			return makeAuth(auth)
-		}
+func (auth *authorization) matchesFromRegex(e *email.Email) bool {
+	if e.From == nil || auth.FromRegex == "" {
+		return false
 	}
 
-	return nil
+	var fromRegex, err = regexp.Compile(auth.FromRegex)
+	if err != nil {
+		log.Fatalf("Invalid regex %q: %s", e.From.Address, err)
+	}
+	return fromRegex.MatchString(e.From.Address)
 }
