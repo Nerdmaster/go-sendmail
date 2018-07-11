@@ -42,8 +42,7 @@ func (e *Email) Read(r io.Reader) error {
 		rawMessage = append(rawMessage, xbuf[:n]...)
 		message, eof = bytesToMessage(rawMessage)
 		if eof || err == io.EOF {
-			e.SetupMessage(message)
-			return nil
+			return e.SetupMessage(message)
 		}
 	}
 
@@ -69,7 +68,8 @@ func bytesToMessage(rawMessage []byte) (message string, done bool) {
 
 // SetupMessage stores the message and then looks for headers in order to
 // determine from/to in case those weren't passed on the command line
-func (e *Email) SetupMessage(message string) {
+func (e *Email) SetupMessage(message string) error {
+	var err error
 	e.Message = message
 
 	var hasFrom bool
@@ -83,24 +83,37 @@ func (e *Email) SetupMessage(message string) {
 		if strings.HasPrefix(line, "From: ") {
 			hasFrom = true
 			if e.From == nil {
-				e.SetFromAddress(line[6:])
+				err = e.SetFromAddress(line[6:])
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		if strings.HasPrefix(line, "Cc: ") {
-			e.AddToAddresses(line[4:])
+			err = e.AddToAddresses(line[4:])
+			if err != nil {
+				return err
+			}
 		}
 		if strings.HasPrefix(line, "Bcc: ") {
-			e.AddToAddresses(line[5:])
+			err = e.AddToAddresses(line[5:])
+			if err != nil {
+				return err
+			}
 		}
 		if strings.HasPrefix(line, "To: ") {
-			e.AddToAddresses(line[4:])
+			err = e.AddToAddresses(line[4:])
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	if !hasFrom && e.From != nil {
 		e.Message = "From: " + e.From.String() + "\r\n" + e.Message
 	}
+	return nil
 }
 
 // SetFromAddress parses addr into a mail.Address, returning an error if
