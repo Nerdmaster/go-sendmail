@@ -4,12 +4,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/mail"
 	"net/smtp"
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/Nerdmaster/sendmail/email"
 	"github.com/go-yaml/yaml"
 	flags "github.com/jessevdk/go-flags"
 )
@@ -30,61 +30,12 @@ type config struct {
 	Host  string
 }
 
-type email struct {
-	From    *mail.Address
-	To      []*mail.Address
-	Message string
-	Auth    smtp.Auth
-}
-
-// setupMessage stores the message and then looks for headers in order to
-// determine from/to in case those weren't passed on the command line
-func (e *email) setupMessage(message string) {
-	e.Message = message
-	for _, line := range lineRegexp.Split(message, -1) {
-		// The first blank line means we're done with headers, so there's no more data to be gleaned
-		if line == "" {
-			return
-		}
-
-		if e.From == nil && strings.HasPrefix(line, "From: ") {
-			e.setFromAddress(line[6:])
-		}
-
-		if strings.HasPrefix(line, "Cc: ") {
-			e.addToAddresses(line[4:])
-		}
-		if strings.HasPrefix(line, "Bcc: ") {
-			e.addToAddresses(line[5:])
-		}
-		if strings.HasPrefix(line, "To: ") {
-			e.addToAddresses(line[4:])
-		}
-	}
-}
-
-func (e *email) setFromAddress(addr string) {
-	var err error
-	e.From, err = mail.ParseAddress(addr)
-	if err != nil {
-		log.Fatalf(`Invalid "from" address %q: %s`, addr, err)
-	}
-}
-
-func (e *email) addToAddresses(addrlist string) {
-	var addrs, err = mail.ParseAddressList(addrlist)
-	if err != nil {
-		log.Fatalf("Invalid address(es) %q: %s", addrlist, err)
-	}
-	e.To = append(e.To, addrs...)
-}
-
 func main() {
 	var conf = readConfig()
-	var e = new(email)
+	var e = email.New()
 
 	getCLIArgs(e)
-	e.setupMessage(parseStdinEmailMessage())
+	e.SetupMessage(parseStdinEmailMessage())
 	e.Auth = getAuth(conf, e.From.Address)
 
 	// Try to send it
@@ -125,17 +76,17 @@ var opts struct {
 	From string `short:"f" description:"From address"`
 }
 
-func getCLIArgs(e *email) {
+func getCLIArgs(e *email.Email) {
 	var args, err = flags.Parse(&opts)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if opts.From != "" {
-		e.setFromAddress(opts.From)
+		e.SetFromAddress(opts.From)
 	}
 
 	for _, arg := range args {
-		e.addToAddresses(arg)
+		e.AddToAddresses(arg)
 	}
 }
 
