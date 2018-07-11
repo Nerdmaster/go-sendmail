@@ -13,12 +13,14 @@ import (
 )
 
 type authorization struct {
-	From      string
-	FromRegex string `yaml:"from_regex"`
-	Catchall  bool
-	Username  string
-	Password  string
-	Host      string
+	From        string
+	To          string
+	FromRegex   string `yaml:"from_regex"`
+	RewriteFrom string `yaml:"rewrite_from"`
+	Catchall    bool
+	Username    string
+	Password    string
+	Host        string
 }
 
 type config struct {
@@ -42,7 +44,10 @@ func main() {
 	}
 	for _, auth := range conf.Auths {
 		if auth.matches(e) {
-			e.Auth = smtp.PlainAuth("", auth.Username, auth.Password, auth.Host)
+			err = auth.assignToEmail(e)
+			if err != nil {
+				log.Fatalf("Unable to assign auth to email: %s", err)
+			}
 			break
 		}
 	}
@@ -105,7 +110,8 @@ func getCLIArgs(e *email.Email) {
 func (auth *authorization) matches(e *email.Email) bool {
 	return auth.Catchall ||
 		auth.matchesFrom(e) ||
-		auth.matchesFromRegex(e)
+		auth.matchesFromRegex(e) ||
+		auth.matchesTo(e)
 }
 
 func (auth *authorization) matchesFrom(e *email.Email) bool {
@@ -122,4 +128,16 @@ func (auth *authorization) matchesFromRegex(e *email.Email) bool {
 		log.Fatalf("Invalid regex %q: %s", e.From.Address, err)
 	}
 	return fromRegex.MatchString(e.From.Address)
+}
+
+func (auth *authorization) matchesTo(e *email.Email) bool {
+	return len(e.To) > 0 && e.To[0] != nil && auth.To == e.To[0].Address
+}
+
+func (auth *authorization) assignToEmail(e *email.Email) error {
+	e.Auth = smtp.PlainAuth("", auth.Username, auth.Password, auth.Host)
+	if auth.RewriteFrom != "" {
+		return e.SetFromAddress(auth.RewriteFrom)
+	}
+	return nil
 }

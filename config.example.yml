@@ -1,10 +1,25 @@
+# Auths are matched in order, so if two rules would catch something, the first one that matches will "win"
 auths:
+  # "from" matches exact emails only
   - from: "me@example.com"
     username: me@example.com
     password: mysmtppassword
     host: "example.com"
 
-  - from_regex: "^.*@somesite.com$":
+  # "from_regex" matches any regex
+  - from_regex: "^.*@example.com$":
+    username: noreply@example.com
+    password: mysmtppassword
+    host: "example.com"
+
+  # "to" matches an exact "to" email - handy for things like contact forms in
+  # PHP, where they tend to fake the "from" address
+  - to: "mymail@example.com"
+    # rewrite_from turns any "from" address into the given value.  Very handy
+    # when you have secure SMTP that whitelists senders.  Note that this must
+    # match the *first* "to" in use (whether via command-line or email headers)
+    # to avoid giant BCC lists being checked address-by-address.
+    rewrite_from: contactform@example.com
     username: noreply@example.com
     password: mysmtppassword
     host: "example.com"
