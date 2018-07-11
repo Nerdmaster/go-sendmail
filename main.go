@@ -82,11 +82,17 @@ func getCLIArgs(e *email.Email) {
 		log.Fatal(err)
 	}
 	if opts.From != "" {
-		e.SetFromAddress(opts.From)
+		err = e.SetFromAddress(opts.From)
+		if err != nil {
+			log.Fatalf(`Unable to set "from" address: %s`, err)
+		}
 	}
 
 	for _, arg := range args {
-		e.AddToAddresses(arg)
+		err = e.AddToAddresses(arg)
+		if err != nil {
+			log.Fatalf(`Unable to set "to" address: %s`, err)
+		}
 	}
 }
 

@@ -3,7 +3,6 @@ package email
 import (
 	"errors"
 	"io"
-	"log"
 	"net/mail"
 	"net/smtp"
 	"regexp"
@@ -104,19 +103,22 @@ func (e *Email) SetupMessage(message string) {
 	}
 }
 
-// SetFromAddress parses addr into a mail.Address, returning an error if parsing fails
-func (e *Email) SetFromAddress(addr string) {
-	var err error
-	e.From, err = mail.ParseAddress(addr)
-	if err != nil {
-		log.Fatalf(`Invalid "from" address %q: %s`, addr, err)
+// SetFromAddress parses addr into a mail.Address, returning an error if
+// parsing fails
+func (e *Email) SetFromAddress(addr string) error {
+	var from, err = mail.ParseAddress(addr)
+	if err == nil {
+		e.From = from
 	}
+	return err
 }
 
-func (e *Email) AddToAddresses(addrlist string) {
+// AddToAddresses parses addrlist into a list of mail.Addresses, returning an
+// error if parsing fails
+func (e *Email) AddToAddresses(addrlist string) error {
 	var addrs, err = mail.ParseAddressList(addrlist)
-	if err != nil {
-		log.Fatalf("Invalid address(es) %q: %s", addrlist, err)
+	if err == nil {
+		e.To = append(e.To, addrs...)
 	}
-	e.To = append(e.To, addrs...)
+	return err
 }
