@@ -1,6 +1,8 @@
 package email
 
 import (
+	"errors"
+	"io"
 	"log"
 	"net/mail"
 	"net/smtp"
@@ -21,6 +23,49 @@ type Email struct {
 // New returns a new empty Email pointer
 func New() *Email {
 	return new(Email)
+}
+
+// Read processes the given reader, treating it as if it were a stdin buffer as
+// sendmail does.  It will automatically split up lines on any kind of newline,
+// and then process headers via SetupMessage.
+func (e *Email) Read(r io.Reader) error {
+	var eof bool
+	var rawMessage []byte
+	var message string
+	var buf [10240]byte
+	for !eof {
+		var xbuf = buf[0:]
+		var n, err = r.Read(xbuf)
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		rawMessage = append(rawMessage, xbuf[:n]...)
+		message, eof = bytesToMessage(rawMessage)
+		if eof || err == io.EOF {
+			e.SetupMessage(message)
+			return nil
+		}
+	}
+
+	return errors.New("email.Read: no data")
+}
+
+func bytesToMessage(rawMessage []byte) (message string, done bool) {
+	var s = string(rawMessage)
+	var lines = lineRegexp.Split(s, -1)
+
+	// Kill the trailing newline
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	for i, line := range lines {
+		if line == "." {
+			return strings.Join(lines[:i], "\r\n"), true
+		}
+	}
+	return strings.Join(lines, "\r\n"), false
 }
 
 // SetupMessage stores the message and then looks for headers in order to

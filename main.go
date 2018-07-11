@@ -1,13 +1,11 @@
 package main
 
 import (
-	"io"
 	"io/ioutil"
 	"log"
 	"net/smtp"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/Nerdmaster/sendmail/email"
 	"github.com/go-yaml/yaml"
@@ -35,8 +33,10 @@ func main() {
 	var e = email.New()
 
 	getCLIArgs(e)
-	e.SetupMessage(parseStdinEmailMessage())
-	e.Auth = getAuth(conf, e.From.Address)
+	e.Read(os.Stdin)
+	if e.From != nil {
+		e.Auth = getAuth(conf, e.From.Address)
+	}
 
 	// Try to send it
 	var toList = make([]string, len(e.To))
@@ -88,45 +88,6 @@ func getCLIArgs(e *email.Email) {
 	for _, arg := range args {
 		e.AddToAddresses(arg)
 	}
-}
-
-func parseStdinEmailMessage() string {
-	var eof bool
-	var rawMessage []byte
-	var message string
-	var buf [10240]byte
-	for !eof {
-		var xbuf = buf[0:]
-		var n, err = os.Stdin.Read(xbuf)
-		if err != nil && err != io.EOF {
-			log.Fatalf("Error reading from stdin: %s", err)
-		}
-
-		rawMessage = append(rawMessage, xbuf[:n]...)
-		message, eof = bytesToMessage(rawMessage)
-		if eof || err == io.EOF {
-			return message
-		}
-	}
-
-	return ""
-}
-
-func bytesToMessage(rawMessage []byte) (message string, done bool) {
-	var s = string(rawMessage)
-	var lines = lineRegexp.Split(s, -1)
-
-	// Kill the trailing newline
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-
-	for i, line := range lines {
-		if line == "." {
-			return strings.Join(lines[:i], "\r\n"), true
-		}
-	}
-	return strings.Join(lines, "\r\n"), false
 }
 
 func makeAuth(auth authorization) smtp.Auth {
