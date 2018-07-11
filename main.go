@@ -26,6 +26,11 @@ type config struct {
 	Host  string
 }
 
+var opts struct {
+	From    string `short:"f" description:"From address"`
+	Verbose bool   `short:"v" description:"Verbose mode"`
+}
+
 func main() {
 	var conf = readConfig()
 	var e = email.New()
@@ -40,6 +45,11 @@ func main() {
 	}
 
 	// Try to send it
+	if opts.Verbose {
+		log.Printf("DEBUG: trying to send email from %q to %v, message follows", e.From, e.To)
+		log.Println(e.Message)
+	}
+
 	err = e.Send(conf.Host)
 	if err != nil {
 		log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
@@ -69,14 +79,10 @@ func readConfig() config {
 	return conf
 }
 
-var opts struct {
-	From string `short:"f" description:"From address"`
-}
-
 func getCLIArgs(e *email.Email) {
 	var args, err = flags.Parse(&opts)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to parse CLI flags: %s", err)
 	}
 	if opts.From != "" {
 		err = e.SetFromAddress(opts.From)
