@@ -40,13 +40,9 @@ func main() {
 	}
 
 	// Try to send it
-	var toList = make([]string, len(e.To))
-	for i, to := range e.To {
-		toList[i] = to.String()
-	}
-	var err = smtp.SendMail(conf.Host, e.Auth, e.From.String(), toList, []byte(e.Message))
+	err = e.Send(conf.Host)
 	if err != nil {
-		log.Fatalf("Unable to send email (from %q, to %q, msg %q): %s", e.From, e.To, e.Message, err)
+		log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
 	}
 }
 

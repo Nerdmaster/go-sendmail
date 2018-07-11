@@ -135,3 +135,19 @@ func (e *Email) AddToAddresses(addrlist string) error {
 	}
 	return err
 }
+
+// Send uses the from/to/message data combined with host to attempt to send the
+// message via smtp
+func (e *Email) Send(host string) error {
+	var toList = make([]string, len(e.To))
+	for i, to := range e.To {
+		toList[i] = to.String()
+	}
+
+	if e.From == nil || len(e.To) == 0 {
+		return errors.New("mail.Send: must have from and to addresses set")
+	}
+
+	var err = smtp.SendMail(host, e.Auth, e.From.String(), toList, []byte(e.Message))
+	return err
+}
