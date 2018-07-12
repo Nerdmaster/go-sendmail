@@ -1,129 +1,169 @@
 package email
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 var lineRegexp = regexp.MustCompile("\r\n|\r|\n")
 
+// Header wraps mail.Header, which gives us *most* of the functionality we want
+// our header to have, but not quite everything
+type Header struct {
+	h mail.Header
+}
+
+// Address returns a single address for the given header field.  Uses h.Get, so
+// if there is more than one value, only the first is used.  If there is more
+// than one email address in the list, only the first is returned.  Suitable
+// for pulling the "From" field, which is typically only one address, or the
+// first (and therefore hopefully the most important) "To" field.
+func (h Header) Address(key string) (addr *mail.Address, err error) {
+	var list AddressList
+	list, err = h.AddressList(key)
+	if len(list) > 0 {
+		addr = list[0]
+	}
+
+	return addr, err
+}
+
+// AddressList parses the named header field as a list of addresses.
+func (h Header) AddressList(key string) (AddressList, error) {
+	var list, err = h.h.AddressList(key)
+
+	// Ignore errors when it's simply a lack of a given header
+	if err == mail.ErrHeaderNotPresent {
+		err = nil
+	}
+
+	return list, err
+}
+
+// Set replaces the field identified by key with the single value passed in
+func (h Header) Set(key, value string) {
+	textproto.MIMEHeader(h.h).Set(key, value)
+}
+
+// Del removes the given header
+func (h Header) Del(key string) {
+	textproto.MIMEHeader(h.h).Del(key)
+}
+
+// Write writes a header in wire format, reprinting only the first value of any
+// given field, as the spec states multiple occurences of the same field have
+// no specific interpretation, and are discouraged.
+func (h Header) Write(w io.Writer) error {
+	var data []string
+	for k, vlist := range h.h {
+		data = append(data, k+": "+vlist[0])
+	}
+	sort.Strings(data)
+	var _, err = w.Write([]byte(strings.Join(data, "\r\n")))
+	return err
+}
+
+// AddressList aliases a slice of addresses to help with "round-tripping" a
+// list back into strings
+type AddressList []*mail.Address
+
+// String returns a parseable string of email addresses
+func (list AddressList) String() string {
+	return strings.Join(list.Strings(), ",")
+}
+
+// Strings returns a single string for each address in the list, suitable for
+// the smtp SendMail call
+func (list AddressList) Strings() []string {
+	var s = make([]string, len(list))
+	for i, addr := range list {
+		s[i] = addr.String()
+	}
+	return s
+}
+
 // An Email parses message data to prepare for SMTP delivery
 type Email struct {
 	From    *mail.Address
-	To      []*mail.Address
-	Message string
+	To      AddressList
+	CC      AddressList
+	BCC     AddressList
+	Message []byte
+	Header  Header
 	Auth    smtp.Auth
 	Mailer  func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
 
-// New returns a new empty Email pointer
-func New() *Email {
-	return &Email{Mailer: smtp.SendMail}
-}
-
 // Read processes the given reader, treating it as if it were a stdin buffer as
-// sendmail does.  It will automatically split up lines on any kind of newline,
-// and then process headers via SetupMessage.
-func (e *Email) Read(r io.Reader) error {
-	var eof bool
-	var rawMessage []byte
-	var message string
-	var buf [10240]byte
-	for !eof {
-		var xbuf = buf[0:]
-		var n, err = r.Read(xbuf)
-		if err != nil && err != io.EOF {
-			return err
-		}
-
-		rawMessage = append(rawMessage, xbuf[:n]...)
-		message, eof = bytesToMessage(rawMessage)
-		if eof || err == io.EOF {
-			return e.SetupMessage(message)
-		}
-	}
-
-	return errors.New("email.Read: no data")
+// sendmail does.  Headers which set From, To, CC, or BCC values will set those
+// fields in the returned Email instance.
+func Read(r io.Reader) (*Email, error) {
+	var e = &Email{Mailer: smtp.SendMail}
+	return e, e.read(r)
 }
 
-func bytesToMessage(rawMessage []byte) (message string, done bool) {
-	var s = string(rawMessage)
-	var lines = lineRegexp.Split(s, -1)
-
-	// Kill the trailing newline
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
+// read actually does the work of parsing data from r
+func (e *Email) read(r io.Reader) error {
+	var m, err = mail.ReadMessage(r)
+	if err != nil {
+		return err
 	}
 
-	for i, line := range lines {
-		if line == "." {
-			return strings.Join(lines[:i], "\r\n"), true
-		}
+	e.Header.h = m.Header
+	e.Message, err = ioutil.ReadAll(m.Body)
+	if err != nil {
+		return err
 	}
-	return strings.Join(lines, "\r\n"), false
+
+	return e.parseHeader()
 }
 
-// SetupMessage stores the message and then looks for headers in order to
-// determine from/to in case those weren't passed on the command line
-func (e *Email) SetupMessage(message string) error {
+// parseHeader finds the email-related header for from/to/cc/bcc so we can
+// properly populate the smtp send
+func (e *Email) parseHeader() error {
+	var from *mail.Address
+	var list AddressList
 	var err error
-	var lines []string
 
-	var headersDone bool
+	from, err = e.Header.Address("from")
+	if from != nil {
+		e.From = from
+	}
 
-	for _, line := range lineRegexp.Split(message, -1) {
-		// The first blank line means we're done with headers, so there's no more
-		// data to be gleaned
-		if line == "" {
-			headersDone = true
+	if err == nil {
+		list, err = e.Header.AddressList("to")
+		if len(list) > 0 {
+			e.To = list
 		}
+	}
 
-		if !headersDone {
-			line, err = e.parseHeader(line)
-			if err != nil {
-				return err
-			}
+	if err == nil {
+		list, err = e.Header.AddressList("cc")
+		if len(list) > 0 {
+			e.CC = list
 		}
-
-		lines = append(lines, line)
 	}
 
-	e.Message = strings.Join(lines, "\r\n")
-	return nil
-}
-
-// parseHeader treats line as a header string, looking for from, to, cc, or bcc
-// headers.  A modified line (if necessary) is returned along with any errors.
-func (e *Email) parseHeader(line string) (string, error) {
-	var err error
-	if strings.HasPrefix(line, "From: ") {
-		if e.From == nil {
-			err = e.SetFromAddress(line[6:])
+	if err == nil {
+		list, err = e.Header.AddressList("bcc")
+		if len(list) > 0 {
+			e.BCC = list
 		}
-
-		// Always remove the "From" header to ensure it can be set to e.From just prior to sending the message
-		return "", err
 	}
 
-	if strings.HasPrefix(line, "Cc: ") {
-		return line, e.AddToAddresses(line[4:])
-	}
-	if strings.HasPrefix(line, "Bcc: ") {
-		return line, e.AddToAddresses(line[5:])
-	}
-	if strings.HasPrefix(line, "To: ") {
-		return line, e.AddToAddresses(line[4:])
-	}
-
-	return line, nil
+	return err
 }
 
 // SetFromAddress parses addr into a mail.Address, returning an error if
-// parsing fails
+// parsing fails.  Replaces the existing From address if it exists.
 func (e *Email) SetFromAddress(addr string) error {
 	var from, err = mail.ParseAddress(addr)
 	if err == nil {
@@ -132,12 +172,12 @@ func (e *Email) SetFromAddress(addr string) error {
 	return err
 }
 
-// AddToAddresses parses addrlist into a list of mail.Addresses, returning an
-// error if parsing fails
-func (e *Email) AddToAddresses(addrlist string) error {
-	var addrs, err = mail.ParseAddressList(addrlist)
+// SetToAddresses parses addrlist into a list of mail.Addresses which replaces
+// the current To value, returning an error if parsing fails.
+func (e *Email) SetToAddresses(addrlist string) error {
+	var tolist, err = mail.ParseAddressList(addrlist)
 	if err == nil {
-		e.To = append(e.To, addrs...)
+		e.To = tolist
 	}
 	return err
 }
@@ -145,18 +185,27 @@ func (e *Email) AddToAddresses(addrlist string) error {
 // Send uses the from/to/message data combined with host to attempt to send the
 // message via smtp
 func (e *Email) Send(host string) error {
-	var toList = make([]string, len(e.To))
-	for i, to := range e.To {
-		toList[i] = to.String()
-	}
-
 	if e.From == nil || len(e.To) == 0 {
 		return errors.New("mail.Send: must have from and to addresses set")
 	}
 
-	// Hack in the "From" header
-	var msg = "From: " + e.From.String() + "\r\n" + e.Message
+	// Fix all headers: To, CC, and From must match what's actually happening.
+	// BCC is unnecessary and is removed.
+	e.Header.Set("from", e.From.String())
+	e.Header.Set("to", e.To.String())
+	e.Header.Set("cc", e.CC.String())
+	e.Header.Del("bcc")
 
-	var err = e.Mailer(host, e.Auth, e.From.String(), toList, []byte(msg))
+	var b = new(bytes.Buffer)
+	e.Header.Write(b)
+	b.WriteString("\r\n\r\n")
+	b.Write(e.Message)
+
+	var addrs AddressList
+	addrs = append(addrs, e.To...)
+	addrs = append(addrs, e.CC...)
+	addrs = append(addrs, e.BCC...)
+
+	var err = e.Mailer(host, e.Auth, e.From.String(), addrs.Strings(), b.Bytes())
 	return err
 }
