@@ -71,7 +71,9 @@ func False(exp bool, m string, t *testing.T) {
 func Equal(expected, actual interface{}, message string, t *testing.T) {
 	caller := getCallerName(1)
 	if expected != actual {
-		failure(caller, fmt.Sprintf("Expected %#v, but got %#v - %s", expected, actual, message), t)
+		failure(caller, message, t)
+		t.Logf("Expected: %#v", expected)
+		t.Logf("Actual:   %#v", actual)
 		return
 	}
 	success(caller, message, t)
