@@ -35,13 +35,12 @@ var opts struct {
 
 func main() {
 	var conf = readConfig()
-	var e = email.New()
-
-	getCLIArgs(e)
-	var err = e.Read(os.Stdin)
+	var e, err = email.Read(os.Stdin)
 	if err != nil {
 		log.Fatalf("Unable to read stdin: %s", err)
 	}
+	getCLIArgs(e)
+
 	for _, auth := range conf.Auths {
 		if auth.matches(e) {
 			err = auth.assignToEmail(e)
@@ -100,7 +99,7 @@ func getCLIArgs(e *email.Email) {
 	}
 
 	for _, arg := range args {
-		err = e.AddToAddresses(arg)
+		err = e.SetToAddresses(arg)
 		if err != nil {
 			log.Fatalf(`Unable to set "to" address: %s`, err)
 		}
