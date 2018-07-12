@@ -102,11 +102,16 @@ type Email struct {
 	Mailer  func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
 
+// New returns a basic Email instance with its Mailer set to the default smtp.SendMail
+func New() *Email {
+	return &Email{Mailer: smtp.SendMail}
+}
+
 // Read processes the given reader, treating it as if it were a stdin buffer as
 // sendmail does.  Headers which set From, To, CC, or BCC values will set those
 // fields in the returned Email instance.
 func Read(r io.Reader) (*Email, error) {
-	var e = &Email{Mailer: smtp.SendMail}
+	var e = New()
 	return e, e.read(r)
 }
 
