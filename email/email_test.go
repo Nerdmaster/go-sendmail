@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Nerdmaster/sendmail/assert"
+	"github.com/uoregon-libraries/gopkg/assert"
 )
 
 type fakeSentMessage struct {
