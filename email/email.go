@@ -48,6 +48,11 @@ func (h Header) AddressList(key string) (AddressList, error) {
 	return list, err
 }
 
+// Get returns the value for the given header field
+func (h Header) Get(key string) string {
+	return textproto.MIMEHeader(h.h).Get(key)
+}
+
 // Set replaces the field identified by key with the single value passed in
 func (h Header) Set(key, value string) {
 	textproto.MIMEHeader(h.h).Set(key, value)
