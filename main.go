@@ -30,6 +30,7 @@ type config struct {
 
 var opts struct {
 	From    string `short:"f" description:"From address"`
+	Dryrun  bool   `short:"n" description:"Dry run; do not send an email message"`
 	Verbose bool   `short:"v" description:"Verbose mode"`
 }
 
@@ -57,9 +58,11 @@ func main() {
 		log.Println(e.Message)
 	}
 
-	err = e.Send(conf.Host)
-	if err != nil {
-		log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
+	if !opts.Dryrun {
+		var err = e.Send(conf.Host)
+		if err != nil {
+			log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
+		}
 	}
 }
 
