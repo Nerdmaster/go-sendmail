@@ -5,27 +5,15 @@ import (
 	"log"
 	"net/smtp"
 	"os"
-	"regexp"
 
 	"github.com/Nerdmaster/sendmail/email"
+	"github.com/Nerdmaster/sendmail/rule"
 	"github.com/go-yaml/yaml"
 	flags "github.com/jessevdk/go-flags"
 )
 
-type authorization struct {
-	From        string
-	To          string
-	FromRegex   string `yaml:"from_regex"`
-	RewriteFrom string `yaml:"rewrite_from"`
-	Catchall    bool
-	Username    string
-	Password    string
-	Host        string
-}
-
 type config struct {
-	Auths []authorization
-	Host  string
+	Rules []*rule.Rule
 }
 
 var opts struct {
@@ -42,15 +30,16 @@ func main() {
 	}
 	getCLIArgs(e)
 
-	for _, auth := range conf.Auths {
-		if auth.matches(e) {
-			err = auth.assignToEmail(e)
-			if err != nil {
-				log.Fatalf("Unable to assign auth to email: %s", err)
-			}
+	for _, rule := range conf.Rules {
+		if rule.Match(e) {
+			process(e, rule.Auth)
 			break
 		}
 	}
+}
+
+func process(e *email.Email, a *rule.Authentication) {
+	e.Auth = smtp.PlainAuth("", a.Username, a.Password, a.Host)
 
 	// Try to send it
 	if opts.Verbose {
@@ -59,7 +48,7 @@ func main() {
 	}
 
 	if !opts.Dryrun {
-		var err = e.Send(conf.Host)
+		var err = e.Send(a.Server)
 		if err != nil {
 			log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
 		}
@@ -107,39 +96,4 @@ func getCLIArgs(e *email.Email) {
 			log.Fatalf(`Unable to set "to" address: %s`, err)
 		}
 	}
-}
-
-func (auth *authorization) matches(e *email.Email) bool {
-	return auth.Catchall ||
-		auth.matchesFrom(e) ||
-		auth.matchesFromRegex(e) ||
-		auth.matchesTo(e)
-}
-
-func (auth *authorization) matchesFrom(e *email.Email) bool {
-	return e.From != nil && auth.From == e.From.Address
-}
-
-func (auth *authorization) matchesFromRegex(e *email.Email) bool {
-	if e.From == nil || auth.FromRegex == "" {
-		return false
-	}
-
-	var fromRegex, err = regexp.Compile(auth.FromRegex)
-	if err != nil {
-		log.Fatalf("Invalid regex %q: %s", e.From.Address, err)
-	}
-	return fromRegex.MatchString(e.From.Address)
-}
-
-func (auth *authorization) matchesTo(e *email.Email) bool {
-	return len(e.To) > 0 && e.To[0] != nil && auth.To == e.To[0].Address
-}
-
-func (auth *authorization) assignToEmail(e *email.Email) error {
-	e.Auth = smtp.PlainAuth("", auth.Username, auth.Password, auth.Host)
-	if auth.RewriteFrom != "" {
-		return e.SetFromAddress(auth.RewriteFrom)
-	}
-	return nil
 }
