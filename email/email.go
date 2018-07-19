@@ -15,10 +15,14 @@ import (
 
 var lineRegexp = regexp.MustCompile("\r\n|\r|\n")
 
-// Header wraps mail.Header, which gives us *most* of the functionality we want
-// our header to have, but not quite everything
+// Header is a read-only mail.Header wrapper
 type Header struct {
 	h mail.Header
+}
+
+// rwHeader is internal to let us manipulate the header directly
+type rwHeader struct {
+	Header
 }
 
 // Address returns a single address for the given header field.  Uses h.Get, so
@@ -54,26 +58,41 @@ func (h Header) Get(key string) string {
 }
 
 // Set replaces the field identified by key with the single value passed in
-func (h Header) Set(key, value string) {
+func (h rwHeader) Set(key, value string) {
 	textproto.MIMEHeader(h.h).Set(key, value)
 }
 
 // Del removes the given header
-func (h Header) Del(key string) {
+func (h rwHeader) Del(key string) {
 	textproto.MIMEHeader(h.h).Del(key)
 }
 
 // Write writes a header in wire format, reprinting only the first value of any
-// given field, as the spec states multiple occurences of the same field have
-// no specific interpretation, and are discouraged.
+// given field, as the spec states multiple occurrences of the same field have
+// no specific interpretation, and are discouraged.  We deliberately ignore BCC
+// since outgoing emails don't need it.
 func (h Header) Write(w io.Writer) error {
 	var data []string
 	for k, vlist := range h.h {
+		if strings.ToLower(k) == "bcc" {
+			continue
+		}
 		data = append(data, k+": "+vlist[0])
 	}
 	sort.Strings(data)
 	var _, err = w.Write([]byte(strings.Join(data, "\r\n")))
 	return err
+}
+
+// Clone creates a copy of all keys and their value lists
+func (h Header) Clone() Header {
+	var h2 = Header{make(mail.Header)}
+	for k, vlist := range h.h {
+		h2.h[k] = make([]string, len(vlist))
+		copy(h2.h[k], h.h[k])
+	}
+
+	return h2
 }
 
 // AddressList aliases a slice of addresses to help with "round-tripping" a
@@ -102,7 +121,7 @@ type Email struct {
 	CC      AddressList
 	BCC     AddressList
 	Message []byte
-	Header  Header
+	header  rwHeader
 	Auth    smtp.Auth
 	Mailer  func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
@@ -127,7 +146,7 @@ func (e *Email) read(r io.Reader) error {
 		return err
 	}
 
-	e.Header.h = m.Header
+	e.header.h = m.Header
 	e.Message, err = ioutil.ReadAll(m.Body)
 	if err != nil {
 		return err
@@ -143,27 +162,27 @@ func (e *Email) parseHeader() error {
 	var list AddressList
 	var err error
 
-	from, err = e.Header.Address("from")
+	from, err = e.header.Address("from")
 	if from != nil {
 		e.From = from
 	}
 
 	if err == nil {
-		list, err = e.Header.AddressList("to")
+		list, err = e.header.AddressList("to")
 		if len(list) > 0 {
 			e.To = list
 		}
 	}
 
 	if err == nil {
-		list, err = e.Header.AddressList("cc")
+		list, err = e.header.AddressList("cc")
 		if len(list) > 0 {
 			e.CC = list
 		}
 	}
 
 	if err == nil {
-		list, err = e.Header.AddressList("bcc")
+		list, err = e.header.AddressList("bcc")
 		if len(list) > 0 {
 			e.BCC = list
 		}
@@ -192,6 +211,33 @@ func (e *Email) SetToAddresses(addrlist string) error {
 	return err
 }
 
+// Header returns a read-only copy of the email header after ensuring it reflects all
+// settable values, such as when e.From is assigned manually or
+// e.SetToAddresses is called.  Affects all currently modifiable fields: From,
+// To, CC, and BCC.
+func (e *Email) Header() Header {
+	var h = rwHeader{e.header.Clone()}
+	h.Del("from")
+	h.Del("to")
+	h.Del("cc")
+	h.Del("bcc")
+
+	if e.From != nil {
+		h.Set("from", e.From.String())
+	}
+	if len(e.To) > 0 {
+		h.Set("to", e.To.String())
+	}
+	if len(e.CC) > 0 {
+		h.Set("cc", e.CC.String())
+	}
+	if len(e.BCC) > 0 {
+		h.Set("bcc", e.BCC.String())
+	}
+
+	return h.Header
+}
+
 // Send uses the from/to/message data combined with host to attempt to send the
 // message via smtp
 func (e *Email) Send(host string) error {
@@ -199,15 +245,8 @@ func (e *Email) Send(host string) error {
 		return errors.New("mail.Send: must have from and to addresses set")
 	}
 
-	// Fix all headers: To, CC, and From must match what's actually happening.
-	// BCC is unnecessary and is removed.
-	e.Header.Set("from", e.From.String())
-	e.Header.Set("to", e.To.String())
-	e.Header.Set("cc", e.CC.String())
-	e.Header.Del("bcc")
-
 	var b = new(bytes.Buffer)
-	e.Header.Write(b)
+	e.Header().Write(b)
 	b.WriteString("\r\n\r\n")
 	b.Write(e.Message)
 

@@ -51,13 +51,13 @@ func (m *matcher) match(e *email.Email) bool {
 	// We don't care about errors here, because lack of a valid address just
 	// means it can't match *anything*.
 	case "to", "from", "cc", "bcc":
-		var addr, err = e.Header.Address(m.field)
+		var addr, err = e.Header().Address(m.field)
 		if err != nil || addr == nil {
 			return false
 		}
 		val = addr.Address
 	default:
-		val = e.Header.Get(m.field)
+		val = e.Header().Get(m.field)
 	}
 
 	if m.regex {

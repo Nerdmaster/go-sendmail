@@ -63,8 +63,8 @@ func TestIgnoresDupeFields(t *testing.T) {
 	assert.Equal("", e.From.Name, "from name", t)
 	assert.Equal("me@example.org", e.From.Address, "from address", t)
 	var buf = new(bytes.Buffer)
-	e.Header.Write(buf)
-	assert.Equal("From: me@example.org\r\nSubject: hello\r\nTo: you@example.org",
+	e.Header().Write(buf)
+	assert.Equal("From: <me@example.org>\r\nSubject: hello\r\nTo: <you@example.org>",
 		string(buf.Bytes()), "Header shows only the first From field", t)
 }
 
@@ -89,4 +89,12 @@ func TestSend(t *testing.T) {
 		"Subject: Blah\r\n"+
 		"To: \"Another cow\" <another+cow@example.org>\r\n"+
 		"\r\nHello!", string(f.msg), "massaged message: 'from' header added, 'bcc' removed, sorted headers", t)
+}
+
+func TestHeaders(t *testing.T) {
+	var e = &Email{}
+	e.SetFromAddress("user@example.org")
+	assert.Equal("<user@example.org>", e.Header().Get("from"), "from header is set properly", t)
+	e.From = nil
+	assert.Equal("", e.Header().Get("from"), "from header is removed properly", t)
 }
