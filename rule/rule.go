@@ -17,6 +17,10 @@ type matcher struct {
 }
 
 func newMatcher(condition string) (*matcher, error) {
+	if condition == "*" {
+		return &matcher{catchall: true}, nil
+	}
+
 	var parts = strings.SplitN(condition, ":", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("sendmail/filter: match condition format must have a colon")
@@ -31,10 +35,6 @@ func newMatcher(condition string) (*matcher, error) {
 		if err != nil {
 			return nil, fmt.Errorf("sendmail/filter: invalid match condition regex: %s", err)
 		}
-	}
-
-	if m.value == "*" {
-		m.catchall = true
 	}
 
 	return m, nil
