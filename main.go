@@ -30,8 +30,11 @@ func main() {
 	}
 	getCLIArgs(e)
 
-	for _, rule := range conf.Rules {
+	for i, rule := range conf.Rules {
 		if rule.Match(e) {
+			if opts.Verbose {
+				log.Printf("DEBUG: Matched rule %d (matchers: %#v)", i+1, rule.Matchers)
+			}
 			process(e, rule.Auth)
 			break
 		}
@@ -44,10 +47,12 @@ func process(e *email.Email, a *rule.Authentication) {
 	// Try to send it
 	if opts.Verbose {
 		log.Printf("DEBUG: trying to send email from %q to %v, message follows", e.From, e.To)
-		log.Println(e.Message)
+		log.Println(string(e.Message))
 	}
 
-	if !opts.Dryrun {
+	if opts.Dryrun {
+		log.Printf("Dry run requested; not sending email")
+	} else {
 		var err = e.Send(a.Server)
 		if err != nil {
 			log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
