@@ -66,20 +66,19 @@ func (m *matcher) match(e *email.Email) bool {
 	return m.value == val
 }
 
-type Authentication struct {
-	Host     string
-	Username string
-	Password string
-	Server   string
+// A Rule is a collection of match directives to determine if an email should
+// be handled
+type Rule struct {
+	matchers []*matcher
 }
 
-// A Rule is a collection of match directives to determine if an email should
-// be handled, and authentication for sending the email through SMTP
-type Rule struct {
-	Matchers []string
-	Auth     *Authentication
-
-	matchers []*matcher
+func (r *Rule) AddMatcher(condition string) error {
+	var m, err = newMatcher(condition)
+	if err != nil {
+		return err
+	}
+	r.matchers = append(r.matchers, m)
+	return nil
 }
 
 // Match returns true if all matchers match the given email

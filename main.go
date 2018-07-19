@@ -8,14 +8,9 @@ import (
 	"os"
 
 	"github.com/Nerdmaster/sendmail/email"
-	"github.com/Nerdmaster/sendmail/rule"
 	"github.com/go-yaml/yaml"
 	flags "github.com/jessevdk/go-flags"
 )
-
-type config struct {
-	Rules []*rule.Rule
-}
 
 var opts struct {
 	From    string `short:"f" description:"From address"`
@@ -28,8 +23,8 @@ func fatalWithEmail(e *email.Email, err error) {
 }
 
 func main() {
-	var conf = readConfig()
-	if len(conf.Rules) == 0 {
+	var rules = readRules()
+	if len(rules) == 0 {
 		log.Fatalf("No rules configured")
 	}
 	var e, err = email.Read(os.Stdin)
@@ -39,12 +34,8 @@ func main() {
 	getCLIArgs(e)
 
 	var matchFound bool
-	for i, rule := range conf.Rules {
-		if rule.Match(e) {
-			if opts.Verbose {
-				log.Printf("DEBUG: Matched rule %d (matchers: %#v)", i+1, rule.Matchers)
-			}
-			process(e, rule.Auth)
+	for _, rule := range rules {
+		if process(rule, e) {
 			matchFound = true
 			break
 		}
@@ -55,7 +46,18 @@ func main() {
 	}
 }
 
-func process(e *email.Email, a *rule.Authentication) {
+// process tries to match the rule against the email, setting up auth and
+// sending the message if it matches.  Returns whether processing occurred.
+func process(r *RuleConf, e *email.Email) bool {
+	if !r.rule.Match(e) {
+		return false
+	}
+
+	if opts.Verbose {
+		log.Printf("DEBUG: Matched rule (matchers: %#v)", r.Matchers)
+	}
+
+	var a = r.Auth
 	e.Auth = smtp.PlainAuth("", a.Username, a.Password, a.Host)
 
 	// Try to send it
@@ -72,9 +74,11 @@ func process(e *email.Email, a *rule.Authentication) {
 			fatalWithEmail(e, err)
 		}
 	}
+
+	return true
 }
 
-func readConfig() config {
+func readRules() []*RuleConf {
 	var err error
 	var fname = "config.yml"
 	_, err = os.Stat("config.yml")
@@ -88,13 +92,14 @@ func readConfig() config {
 		log.Fatalf("Unable to open %q: %s", fname, err)
 	}
 
-	var conf config
-	err = yaml.Unmarshal(data, &conf)
+	var rlist []*RuleConf
+	err = yaml.Unmarshal(data, &rlist)
 	if err != nil {
 		log.Fatalf("Unable to parse yaml: %s", err)
 	}
 
-	return conf
+	initRules(rlist)
+	return rlist
 }
 
 func getCLIArgs(e *email.Email) {
