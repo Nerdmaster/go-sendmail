@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/smtp"
@@ -22,22 +23,35 @@ var opts struct {
 	Verbose bool   `short:"v" description:"Verbose mode"`
 }
 
+func fatalWithEmail(e *email.Email, err error) {
+	log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
+}
+
 func main() {
 	var conf = readConfig()
+	if len(conf.Rules) == 0 {
+		log.Fatalf("No rules configured")
+	}
 	var e, err = email.Read(os.Stdin)
 	if err != nil {
 		log.Fatalf("Unable to read stdin: %s", err)
 	}
 	getCLIArgs(e)
 
+	var matchFound bool
 	for i, rule := range conf.Rules {
 		if rule.Match(e) {
 			if opts.Verbose {
 				log.Printf("DEBUG: Matched rule %d (matchers: %#v)", i+1, rule.Matchers)
 			}
 			process(e, rule.Auth)
+			matchFound = true
 			break
 		}
+	}
+
+	if !matchFound {
+		fatalWithEmail(e, errors.New("no rules matched"))
 	}
 }
 
@@ -55,7 +69,7 @@ func process(e *email.Email, a *rule.Authentication) {
 	} else {
 		var err = e.Send(a.Server)
 		if err != nil {
-			log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
+			fatalWithEmail(e, err)
 		}
 	}
 }

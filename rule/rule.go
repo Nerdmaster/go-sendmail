@@ -84,6 +84,10 @@ type Rule struct {
 
 // Match returns true if all matchers match the given email
 func (r *Rule) Match(e *email.Email) bool {
+	if len(r.matchers) == 0 {
+		return false
+	}
+
 	for _, matcher := range r.matchers {
 		if !matcher.match(e) {
 			return false
