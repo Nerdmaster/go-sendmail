@@ -18,12 +18,12 @@ func mkrule(t *testing.T, slist ...string) *Rule {
 }
 
 func TestRuleMatch(t *testing.T) {
-	var e = &email.Email{}
-	e.SetToAddresses("foo@example.com,Mister F. <tobias.f@example.com>")
-	e.SetFromAddress("somebody@example.com")
+	var e = email.New()
+	e.Header.Set("to", "foo@example.com,Mister F. <tobias.f@example.com>")
+	e.Header.Set("from", "somebody@example.com")
 
-	var e2 = &email.Email{}
-	e2.SetFromAddress("me@example.com")
+	var e2 = email.New()
+	e2.Header.Set("from", "me@example.com")
 
 	var regex = mkrule(t, `From/regex:^\w*@example.com$`)
 	var failTo = mkrule(t, "To:tobias.f@example.com")
@@ -53,7 +53,7 @@ func TestRuleMatch(t *testing.T) {
 	}
 
 	var e3 = email.New()
-	e3.SetFromAddress("somebody+with+non+word+chars@example.com")
+	e3.Header.Set("from", "somebody+with+non+word+chars@example.com")
 
 	if regex.Match(e3) {
 		t.Errorf("regex shouldn't match an email with non-word characters")

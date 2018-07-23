@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"log"
+	"net/mail"
 	"net/smtp"
 	"os"
 
@@ -19,7 +20,9 @@ var opts struct {
 }
 
 func fatalWithEmail(e *email.Email, err error) {
-	log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", e.From, e.To, e.Message, err)
+	var from = e.Header.Get("from")
+	var to = e.Header.Get("to")
+	log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", from, to, e.Message, err)
 }
 
 func main() {
@@ -62,7 +65,8 @@ func process(r *RuleConf, e *email.Email) bool {
 
 	// Try to send it
 	if opts.Verbose {
-		log.Printf("DEBUG: trying to send email from %q to %v, message follows", e.From, e.To)
+		log.Printf("DEBUG: trying to send email from %q to %v, message follows",
+			e.Header.Get("from"), e.Header.Get("to"))
 		log.Println(string(e.Message))
 	}
 
@@ -108,16 +112,20 @@ func getCLIArgs(e *email.Email) {
 		log.Fatalf("Unable to parse CLI flags: %s", err)
 	}
 	if opts.From != "" {
-		err = e.SetFromAddress(opts.From)
+		var from, err = mail.ParseAddress(opts.From)
 		if err != nil {
-			log.Fatalf(`Unable to set "from" address: %s`, err)
+			log.Fatalf(`Unable to set "from" address %q: %s`, opts.From, err)
 		}
+		e.Header.Set("from", from.String())
 	}
 
+	var tolist email.AddressList
 	for _, arg := range args {
-		err = e.SetToAddresses(arg)
+		var to, err = mail.ParseAddress(arg)
 		if err != nil {
-			log.Fatalf(`Unable to set "to" address: %s`, err)
+			log.Fatalf(`Unable to set "to" address %q: %s`, arg, err)
 		}
+		tolist = append(tolist, to)
 	}
+	e.Header.Set("to", tolist.String())
 }

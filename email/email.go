@@ -20,11 +20,6 @@ type Header struct {
 	h mail.Header
 }
 
-// rwHeader is internal to let us manipulate the header directly
-type rwHeader struct {
-	Header
-}
-
 // Address returns a single address for the given header field.  Uses h.Get, so
 // if there is more than one value, only the first is used.  If there is more
 // than one email address in the list, only the first is returned.  Suitable
@@ -58,12 +53,12 @@ func (h Header) Get(key string) string {
 }
 
 // Set replaces the field identified by key with the single value passed in
-func (h rwHeader) Set(key, value string) {
+func (h Header) Set(key, value string) {
 	textproto.MIMEHeader(h.h).Set(key, value)
 }
 
 // Del removes the given header
-func (h rwHeader) Del(key string) {
+func (h Header) Del(key string) {
 	textproto.MIMEHeader(h.h).Del(key)
 }
 
@@ -116,12 +111,8 @@ func (list AddressList) Strings() []string {
 
 // An Email parses message data to prepare for SMTP delivery
 type Email struct {
-	From    *mail.Address
-	To      AddressList
-	CC      AddressList
-	BCC     AddressList
 	Message []byte
-	header  rwHeader
+	Header  Header
 	Auth    smtp.Auth
 	Mailer  func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
@@ -146,115 +137,50 @@ func (e *Email) read(r io.Reader) error {
 		return err
 	}
 
-	e.header.h = m.Header
+	e.Header.h = m.Header
 	e.Message, err = ioutil.ReadAll(m.Body)
 	if err != nil {
 		return err
 	}
 
-	return e.parseHeader()
+	return nil
 }
 
-// parseHeader finds the email-related header for from/to/cc/bcc so we can
-// properly populate the smtp send
-func (e *Email) parseHeader() error {
-	var from *mail.Address
-	var list AddressList
-	var err error
-
-	from, err = e.header.Address("from")
-	if from != nil {
-		e.From = from
-	}
-
-	if err == nil {
-		list, err = e.header.AddressList("to")
-		if len(list) > 0 {
-			e.To = list
-		}
-	}
-
-	if err == nil {
-		list, err = e.header.AddressList("cc")
-		if len(list) > 0 {
-			e.CC = list
-		}
-	}
-
-	if err == nil {
-		list, err = e.header.AddressList("bcc")
-		if len(list) > 0 {
-			e.BCC = list
-		}
-	}
-
-	return err
-}
-
-// SetFromAddress parses addr into a mail.Address, returning an error if
-// parsing fails.  Replaces the existing From address if it exists.
-func (e *Email) SetFromAddress(addr string) error {
-	var from, err = mail.ParseAddress(addr)
-	if err == nil {
-		e.From = from
-	}
-	return err
-}
-
-// SetToAddresses parses addrlist into a list of mail.Addresses which replaces
-// the current To value, returning an error if parsing fails.
-func (e *Email) SetToAddresses(addrlist string) error {
-	var tolist, err = mail.ParseAddressList(addrlist)
-	if err == nil {
-		e.To = tolist
-	}
-	return err
-}
-
-// Header returns a read-only copy of the email header after ensuring it reflects all
-// settable values, such as when e.From is assigned manually or
-// e.SetToAddresses is called.  Affects all currently modifiable fields: From,
-// To, CC, and BCC.
-func (e *Email) Header() Header {
-	var h = rwHeader{e.header.Clone()}
-	h.Del("from")
-	h.Del("to")
-	h.Del("cc")
-	h.Del("bcc")
-
-	if e.From != nil {
-		h.Set("from", e.From.String())
-	}
-	if len(e.To) > 0 {
-		h.Set("to", e.To.String())
-	}
-	if len(e.CC) > 0 {
-		h.Set("cc", e.CC.String())
-	}
-	if len(e.BCC) > 0 {
-		h.Set("bcc", e.BCC.String())
-	}
-
-	return h.Header
-}
-
-// Send uses the from/to/message data combined with host to attempt to send the
+// Send uses the header data, Auth, and the given host to attempt to send the
 // message via smtp
 func (e *Email) Send(host string) error {
-	if e.From == nil || len(e.To) == 0 {
+	var err error
+	var from *mail.Address
+	var to, cc, bcc AddressList
+
+	from, err = e.Header.Address("from")
+	if err != nil {
+		return errors.New(`mail.Send: invalid "from" field: ` + err.Error())
+	}
+	to, err = e.Header.AddressList("to")
+	if err != nil {
+		return errors.New(`mail.Send: invalid "to" field: ` + err.Error())
+	}
+	cc, err = e.Header.AddressList("cc")
+	if err != nil {
+		return errors.New(`mail.Send: invalid "cc" field: ` + err.Error())
+	}
+	bcc, err = e.Header.AddressList("bcc")
+	if err != nil {
+		return errors.New(`mail.Send: invalid "bcc" field: ` + err.Error())
+	}
+
+	if from == nil || len(to) == 0 {
 		return errors.New("mail.Send: must have from and to addresses set")
 	}
 
 	var b = new(bytes.Buffer)
-	e.Header().Write(b)
+	e.Header.Write(b)
 	b.WriteString("\r\n\r\n")
 	b.Write(e.Message)
 
-	var addrs AddressList
-	addrs = append(addrs, e.To...)
-	addrs = append(addrs, e.CC...)
-	addrs = append(addrs, e.BCC...)
+	to = append(to, cc...)
+	to = append(to, bcc...)
 
-	var err = e.Mailer(host, e.Auth, e.From.String(), addrs.Strings(), b.Bytes())
-	return err
+	return e.Mailer(host, e.Auth, from.String(), to.Strings(), b.Bytes())
 }
