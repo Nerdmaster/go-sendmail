@@ -72,6 +72,22 @@ type Rule struct {
 	matchers []*matcher
 }
 
+// AddMatcher converts a match string into a matcher and adds it to this rule.
+// A match string is composed of: <field>[/regex]:<value>
+//
+//     - Field name is case-insensitive per the RFC
+//     - Value is case-sensitive
+//     - Value must match the email's header field value exactly (see below)
+//     - If "/regex" is after the field, an email's field just needs to match
+//       the matcher's value as a regular expression
+//
+// Note that matching on various email fields actually means matching on the
+// *address portion* of the field.  e.g., matching "somebody@example.org" in
+// the "From" field would work if "From" were "somebody@example.org" or "John
+// <somebody@example.org>".  The name is effectively ignored.  Additionally,
+// matchers won't scour all emails in a given field, as some fields like CC and
+// BCC can get absurdly large.  When matching on fields with multiple email
+// addresses, *only the first* email in the list will match.
 func (r *Rule) AddMatcher(condition string) error {
 	var m, err = newMatcher(condition)
 	if err != nil {
