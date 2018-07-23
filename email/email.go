@@ -119,7 +119,7 @@ type Email struct {
 
 // New returns a basic Email instance with its Mailer set to the default smtp.SendMail
 func New() *Email {
-	return &Email{Mailer: smtp.SendMail}
+	return &Email{Mailer: smtp.SendMail, Header: Header{h: make(mail.Header)}}
 }
 
 // Read processes the given reader, treating it as if it were a stdin buffer as
