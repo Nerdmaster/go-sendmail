@@ -21,17 +21,20 @@ type RuleConf struct {
 	Auth     *authentication
 }
 
+func (r *RuleConf) initRule() {
+	r.rule = new(rule.Rule)
+	for _, mstr := range r.Matchers {
+		var err = r.rule.AddMatcher(mstr)
+		if err != nil {
+			log.Fatalf("Invalid rule matcher string (%s): %s", mstr, err)
+		}
+	}
+}
+
 // initRules takes the configuration parts of the RuleConf and creates the
 // concrete rule.Rule definitions
 func initRules(rlist []*RuleConf) {
-	var err error
-	for i, r := range rlist {
-		r.rule = new(rule.Rule)
-		for _, mstr := range r.Matchers {
-			err = r.rule.AddMatcher(mstr)
-			if err != nil {
-				log.Fatalf("Invalid rule configuration (rule %d; matcher %q): %s", i, mstr, err)
-			}
-		}
+	for _, r := range rlist {
+		r.initRule()
 	}
 }
