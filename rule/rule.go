@@ -50,7 +50,7 @@ func (m *matcher) match(e *email.Email) bool {
 	// For email-containing fields, we attempt to grab an address and use that.
 	// We don't care about errors here, because lack of a valid address just
 	// means it can't match *anything*.
-	case "to", "from", "cc", "bcc":
+	case "to", "from", "cc", "bcc", "reply-to":
 		var addr, err = e.Header().Address(m.field)
 		if err != nil || addr == nil {
 			return false
