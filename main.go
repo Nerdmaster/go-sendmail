@@ -129,5 +129,7 @@ func applyArgs(e *email.Email, args []string) {
 		}
 		tolist = append(tolist, to)
 	}
-	e.Header.Set("to", tolist.String())
+	if len(tolist) > 0 {
+		e.Header.Set("to", tolist.String())
+	}
 }
