@@ -26,15 +26,21 @@ func fatalWithEmail(e *email.Email, err error) {
 }
 
 func main() {
+	var args, err = flags.Parse(&opts)
+	if err != nil {
+		log.Fatalf("Unable to parse CLI flags: %s", err)
+	}
+
 	var rules = readRules()
 	if len(rules) == 0 {
 		log.Fatalf("No rules configured")
 	}
-	var e, err = email.Read(os.Stdin)
+	var e *email.Email
+	e, err = email.Read(os.Stdin)
 	if err != nil {
 		log.Fatalf("Unable to read stdin: %s", err)
 	}
-	getCLIArgs(e)
+	applyArgs(e, args)
 
 	var matchFound bool
 	for _, rule := range rules {
@@ -106,11 +112,7 @@ func readRules() []*RuleConf {
 	return rlist
 }
 
-func getCLIArgs(e *email.Email) {
-	var args, err = flags.Parse(&opts)
-	if err != nil {
-		log.Fatalf("Unable to parse CLI flags: %s", err)
-	}
+func applyArgs(e *email.Email, args []string) {
 	if opts.From != "" {
 		var from, err = mail.ParseAddress(opts.From)
 		if err != nil {
