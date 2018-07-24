@@ -1,6 +1,7 @@
 package email
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"io"
@@ -132,7 +133,16 @@ func Read(r io.Reader) (*Email, error) {
 
 // read actually does the work of parsing data from r
 func (e *Email) read(r io.Reader) error {
-	var m, err = mail.ReadMessage(r)
+	// In order to stop on the first ".", we have to process and then rewrite the
+	// reader, otherwise the mail package just keeps on reading indefinitely.
+	// Not to mention includes that "." in the email body.
+	var newR, err = e.readToDot(r)
+	if err != nil {
+		return err
+	}
+
+	var m *mail.Message
+	m, err = mail.ReadMessage(newR)
 	if err != nil {
 		return err
 	}
@@ -144,6 +154,26 @@ func (e *Email) read(r io.Reader) error {
 	}
 
 	return nil
+}
+
+// readToDot reads the raw email data until a single "." is on a line by itself
+// or the stream ends
+func (e *Email) readToDot(r io.Reader) (io.Reader, error) {
+	var s = bufio.NewScanner(r)
+	var lines []string
+	for s.Scan() {
+		var txt = s.Text()
+		if txt == "." {
+			break
+		}
+		lines = append(lines, s.Text())
+	}
+
+	if s.Err() != nil {
+		return nil, errors.New(`mail: scanner reported error reading email: ` + s.Err().Error())
+	}
+
+	return strings.NewReader(strings.Join(lines, "\r\n")), s.Err()
 }
 
 // Send uses the header data, Auth, and the given host to attempt to send the
