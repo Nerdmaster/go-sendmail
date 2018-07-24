@@ -22,7 +22,7 @@ var opts struct {
 func fatalWithEmail(e *email.Email, err error) {
 	var from = e.Header.Get("from")
 	var to = e.Header.Get("to")
-	log.Fatalf("Unable to send email (from %q, to %v, msg %q): %s", from, to, e.Message, err)
+	log.Fatalf("Unable to send email (from %q, to %q, msg %q): %s", from, to, e.Message, err)
 }
 
 func main() {
@@ -43,7 +43,10 @@ func main() {
 	applyArgs(e, args)
 
 	var matchFound bool
-	for _, rule := range rules {
+	for i, rule := range rules {
+		if opts.Verbose {
+			log.Printf("DEBUG: Trying rule %d (matchers: %#v)", i, rule.Matchers)
+		}
 		if process(rule, e) {
 			matchFound = true
 			break
@@ -71,7 +74,7 @@ func process(r *RuleConf, e *email.Email) bool {
 
 	// Try to send it
 	if opts.Verbose {
-		log.Printf("DEBUG: trying to send email from %q to %v, message follows",
+		log.Printf("DEBUG: trying to send email from %q to %q, message follows",
 			e.Header.Get("from"), e.Header.Get("to"))
 		log.Println(string(e.Message))
 	}
