@@ -1,4 +1,5 @@
-# Rules are matched in order, so if two rules would catch something, the first one that matches will "win"
+# Rules are matched in order, so if two rules would catch something, the first
+# one that matches will "win"
 
 # Any number of matchers can be specified, but for a rule to trigger, all
 # matchers must match the message
@@ -31,6 +32,16 @@
     # and only the first address in the list is considered in order to avoid
     # testing hundreds of addresses one by one.
     - "To=mymail@example.com"
+  # actions let you rewrite header fields.  In this example, we store the
+  # "From" in a Reply-To header and rewrite "From" to a static value.  Very
+  # handy when you have a secure SMTP setup where an address can only be used
+  # as the "From" field if it matches the authenticated sender or one of the
+  # sender's aliases.
+  actions:
+    # You can use go template formatting in the SetHeader value.  The context
+    # (".") is the email's header structure.
+    - 'SetHeader Reply-To:{{.Get "from"}}'
+    - 'SetHeader From:"My website contact form" <contactform@example.com>'
   auth:
     host: "example.com"
     username: noreply@example.com
