@@ -23,6 +23,7 @@ github.com/kisielk/gotool v1.0.0 h1:AV2c/EiW3KqPNT9ZKl07ehoAGi4C5/01Cfbblndcapg=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/rogpeppe/godef v0.0.0-20170920080713-b692db1de522 h1:MzB6wOOru/yUkJs6iTkTa0UuKZlc2WAo/jr1TnBH+Sw=
 github.com/rogpeppe/godef v0.0.0-20170920080713-b692db1de522/go.mod h1:ZBiG/aArN4rqpDocvOY8PVZIVqBTm7A2uOasqHjXt9Y=
+github.com/uoregon-libraries/gopkg v0.0.0-20180717193926-dfac8e0fdf03 h1:CNhUquIOOJUZsyDMMP9YUQFQGfVnaoq9Xjpt1ZzL+wA=
 github.com/uoregon-libraries/gopkg v0.0.0-20180717193926-dfac8e0fdf03/go.mod h1:KatIECqGk8WQe3IvA7h8JcODrAyEwpEfhsxF2bYrKw8=
 github.com/zmb3/gogetdoc v0.0.0-20180522031303-10095872a7c5 h1:+KZrWK00kQe9GE16QoWtyuDf6ZF1vXZ43Q/dhRaWpsQ=
 github.com/zmb3/gogetdoc v0.0.0-20180522031303-10095872a7c5/go.mod h1:ypSS7d5A7vLlcgpQpCK+OHYJ2X3jZSKrEOmspZcOSHI=
