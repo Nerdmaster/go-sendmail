@@ -70,6 +70,7 @@ func (m *matcher) match(e *email.Email) bool {
 // be handled
 type Rule struct {
 	matchers []*matcher
+	actions  []action
 }
 
 // AddMatcher converts a match string into a matcher and adds it to this rule.
@@ -109,4 +110,11 @@ func (r *Rule) Match(e *email.Email) bool {
 		}
 	}
 	return true
+}
+
+// Apply runs all actions from this rule on the given email.Email
+func (r *Rule) Apply(e *email.Email) {
+	for _, action := range r.actions {
+		action.apply(e)
+	}
 }

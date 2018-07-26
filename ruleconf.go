@@ -18,6 +18,7 @@ type authentication struct {
 type RuleConf struct {
 	rule     *rule.Rule
 	Matchers []string
+	Actions  []string
 	Auth     *authentication
 }
 
@@ -27,6 +28,12 @@ func (r *RuleConf) initRule() {
 		var err = r.rule.AddMatcher(mstr)
 		if err != nil {
 			log.Fatalf("Invalid rule matcher string (%s): %s", mstr, err)
+		}
+	}
+	for _, astr := range r.Actions {
+		var err = r.rule.AddAction(astr)
+		if err != nil {
+			log.Fatalf("Invalid rule action string (%s): %s", astr, err)
 		}
 	}
 }

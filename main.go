@@ -72,6 +72,11 @@ func process(r *RuleConf, e *email.Email) bool {
 	var a = r.Auth
 	e.Auth = smtp.PlainAuth("", a.Username, a.Password, a.Host)
 
+	if opts.Verbose && len(r.Actions) > 0 {
+		log.Printf("DEBUG: Running actions (%#v)", r.Actions)
+	}
+	r.rule.Apply(e)
+
 	// Try to send it
 	if opts.Verbose {
 		log.Printf("DEBUG: trying to send email from %q to %q, message follows",
