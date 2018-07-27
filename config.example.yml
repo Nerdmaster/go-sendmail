@@ -31,7 +31,7 @@
     # only "blah@example.com" is considered in "To: Somebody <blah@example.com>"),
     # and only the first address in the list is considered in order to avoid
     # testing hundreds of addresses one by one.
-    - "To=mymail@example.com"
+    - "To:mymail@example.com"
   # actions let you rewrite header fields.  In this example, we store the
   # "From" in a Reply-To header and rewrite "From" to a static value.  Very
   # handy when you have a secure SMTP setup where an address can only be used
